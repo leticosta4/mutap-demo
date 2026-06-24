@@ -56,22 +56,21 @@ def parse_mutpy_output(output: str, put_code: str) -> tuple[float, list[MutantIn
         status_match = re.search(r"\[[\d.]+\s*s\]\s*(killed|survived)", block)
         status = status_match.group(1) if status_match else "unknown"
 
-        if status == "survived":
-            mutant_lines = list(original_lines)
-            for line in block.splitlines():
-                m = re.match(r"^([-+])\s*(\d+):\s(.*)", line)
-                if m:
-                    prefix, str_lineno, content = m.group(1), m.group(2), m.group(3)
-                    idx = int(str_lineno) - 1
-                    if idx < len(mutant_lines) and prefix == "+":
-                        mutant_lines[idx] = content
+        mutant_lines = list(original_lines)
+        has_diff = False
+        for line in block.splitlines():
+            m = re.match(r"^([-+])\s*(\d+):\s(.*)", line)
+            if m:
+                prefix, str_lineno, content = m.group(1), m.group(2), m.group(3)
+                idx = int(str_lineno) - 1
+                if idx < len(mutant_lines) and prefix == "+":
+                    mutant_lines[idx] = content
+                    has_diff = True
 
-            desc_match = re.search(r"\[#\s*\d+\]\s*(.*?):", block)
-            desc = f"{operator} mutation" if not desc_match else f"{desc_match.group(1)}: {operator}"
-            mutant_code = "\n".join(mutant_lines)
-            mutants.append(MutantInfo(mid, operator, desc.strip(), status, mutant_code))
-        else:
-            mutants.append(MutantInfo(mid, operator, f"{operator} mutation", status, None))
+        desc_match = re.search(r"\[#\s*\d+\]\s*(.*?):", block)
+        desc = f"{operator} mutation" if not desc_match else f"{desc_match.group(1)}: {operator}"
+        mutant_code = "\n".join(mutant_lines) if has_diff else None
+        mutants.append(MutantInfo(mid, operator, desc.strip(), status, mutant_code))
 
     return ms, mutants
 
@@ -102,3 +101,44 @@ def run_mutation_testing(put_code: str, test_code: str) -> tuple[float, list[Mut
 
         ms, mutants = parse_mutpy_output(output, put_code)
         return ms, mutants, output
+
+
+def generate_mutant_files(put_code: str, output_dir: str | Path) -> list[Path]:
+    """
+    Gera arquivos mutantes no diretório especificado.
+    Roda MutPy com um test dummy para gerar os mutantes,
+    parseia a saída e salva cada mutante como .py individual.
+    Retorna a lista de caminhos dos arquivos mutantes.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    dummy_test = """def test_dummy():
+    pass
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        (tmp / "put.py").write_text(put_code)
+        (tmp / "test_put.py").write_text(f"from put import *\n\n{dummy_test}")
+
+        result = subprocess.run(
+            [str(MUTPY), "--target", "put", "--unit-test", "test_put",
+             "--runner", "pytest", "-m", "-c"],
+            cwd=tmpdir,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        output = result.stdout + result.stderr
+        _, mutants = parse_mutpy_output(output, put_code)
+
+    saved = []
+    for m in mutants:
+        if m.mutant_code:
+            fpath = output_dir / f"mutant_{m.id:03d}.py"
+            fpath.write_text(m.mutant_code)
+            saved.append(fpath)
+
+    return saved

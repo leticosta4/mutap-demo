@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 
-MUTPY = Path(__file__).parent / ".venv" / "bin" / "mut.py"
+MUTPY = Path(__file__).parent.parent / ".venv" / "bin" / "mut.py"
 
 
 def extract_code(text: str) -> str:
