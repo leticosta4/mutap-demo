@@ -24,27 +24,27 @@ def run_pipeline(put_path: str, llm: str = "gemini", shot: str = "zero", max_ite
     print()
 
     put_code = Path(put_path).read_text()
-    print(f"📄 PUT: {Path(put_path).name}")
-    print(f"🔤 LLM: {llm.upper()} | Shot: {shot}")
+    print(f"PUT: {Path(put_path).name}")
+    print(f"LLM: {llm.upper()} | Shot: {shot}")
     print()
 
     if preload_test:
-        print(f"📄 Usando teste pré-carregado: {preload_test}")
+        print(f"Usando teste pré-carregado: {preload_test}")
         test_code = Path(preload_test).read_text()
         print(f"   → Teste:\n{textwrap.indent(test_code, '     ')}")
     else:
-        print("🤖 [LLM] Gerando teste inicial...")
+        print("[LLM] Gerando teste inicial...")
         prompt = build_initial_prompt(put_code, shot)
         raw_test = llm_generate(prompt, llm)
         test_code = refine_test(raw_test, put_code, llm)
         print(f"   → Teste gerado:\n{textwrap.indent(test_code, '     ')}")
     print()
 
-    print("🔧 Corrigindo erros semânticos...")
+    print("Corrigindo erros semânticos...")
     test_code = correct_semantic_errors(test_code, put_code)
     print()
 
-    print("🧬 Executando teste de mutação...")
+    print("Executando teste de mutação...")
     ms, mutants, output = run_mutation_testing(put_code, test_code)
     print(f"   → MS inicial: {ms}%")
 
@@ -60,7 +60,7 @@ def run_pipeline(put_path: str, llm: str = "gemini", shot: str = "zero", max_ite
         while survivors and iteration < max_iterations:
             iteration += 1
             mutant = survivors[0]
-            print(f"🔄 [Iteração {iteration}/{max_iterations}] Prompt aumentado...")
+            print(f"[Iteração {iteration}/{max_iterations}] Prompt aumentado...")
             print(f"   Mutante #{mutant.id}: {mutant.operator} - {mutant.description}")
             print(f"   Código mutante:\n{textwrap.indent(mutant.mutant_code, '     ')}")
             print()
@@ -82,7 +82,7 @@ def run_pipeline(put_path: str, llm: str = "gemini", shot: str = "zero", max_ite
             print()
             ms = ms_new
 
-    print("📊 RESULTADO FINAL")
+    print("RESULTADO FINAL")
     print(f"   MS final: {ms}%")
     if ms < 100:
         print(f"   Mutantes sobreviventes: {len(survivors)}")
@@ -98,7 +98,7 @@ def run_pipeline(put_path: str, llm: str = "gemini", shot: str = "zero", max_ite
         print()
         combined = minimized
 
-    print("📄 Teste final:")
+    print("Teste final:")
     print(f"{textwrap.indent(combined, '   ')}")
 
 
