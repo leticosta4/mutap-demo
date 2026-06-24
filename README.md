@@ -27,7 +27,7 @@ O projeto implementa um loop iterativo onde:
 | | **Ollama + CodeLlama** (alternativa) | LLM local, sem dependência externa |
 | **Mutação** | **MutPy** | Gera mutantes (bugs sintéticos) do código testado |
 | **Testes** | **Pytest** | Executa os testes unitários gerados |
-| **Linguagem** | **Python 3.10+** | — |
+| **Linguagem** | **Python 3.11.0** | — |
 
 ### LLMs suportados
 
@@ -42,7 +42,7 @@ A escolha é feita pelo parâmetro `--llm` na execução.
 
 - **Artigo original:** [Effective Test Generation Using Pre-trained Large Language Models and Mutation Testing](https://arxiv.org/abs/2308.16557) (arXiv:2308.16557)
 - **Repositório oficial do MuTAP:** [github.com/ExpertiseModel/MuTAP](https://github.com/ExpertiseModel/MuTAP)
-- **MutPy (ferramenta de mutação):** [github.com/boxed/mutpy](https://github.com/boxed/mutpy), [página do PYPI](https://pypi.org/project/MutPy/)
+- **MutPy (ferramenta de mutação):** [github.com/boxed/mutpy](https://github.com/mutpy/mutpy), [página do PYPI](https://pypi.org/project/MutPy/)
 - **Gemini API (LLM padrão):** [ai.google.dev](https://ai.google.dev/)
 - **Ollama (LLM local):** [ollama.com](https://ollama.com/)
 
@@ -66,14 +66,14 @@ mutap-demo/
 ### 1. Pré-requisitos
 
 ```bash
-# Python 3.10+
-python --version
+# Python 3.11
+python --version  #ou python3 --version
 
 # Instalar uv (gerenciador de pacotes)
 pip install uv
 
 # Instalar dependências (modo nativo)
-uv add google-generativeai mutpy pytest python-dotenv
+uv sync
 ```
 
 ### 2. Configurar o LLM
