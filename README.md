@@ -6,15 +6,16 @@ Implementação didática do pipeline **MuTAP (Mutation Test case generation usi
 
 Demonstrar como **Large Language Models (LLMs)** podem gerar testes unitários automatizados e como o **Teste de Mutação** pode ser usado como mecanismo de feedback para melhorar iterativamente a eficácia desses testes na detecção de bugs.
 
-O projeto implementa um loop iterativo onde:
+O projeto implementa o pipeline completo do MuTAP, incluindo todas as etapas do artigo original:
 
-1. Um LLM gera um teste inicial para uma função (PUT — Program Under Test)
-2. O MutPy cria mutantes (versões com bugs sintéticos) da função
-3. Os testes são executados contra os mutantes → calcula-se o **Mutation Score (MS)**
-4. Mutantes que **sobrevivem** aos testes revelam limitações no conjunto de testes
-5. O prompt é **aumentado** com o mutante sobrevivente + instrução
-6. O LLM gera um **novo teste** direcionado para matar aquele mutante
-7. Repete-se até MS = 100% ou não haver mais mutantes inexplorados
+1. **Geração inicial** — LLM gera um teste inicial para a PUT (zero-shot ou few-shot)
+2. **Correção sintática** — Teste é executado; se falhar, LLM corrige erros de sintaxe
+3. **Correção semântica** — Cada `assert` é executado individualmente contra a PUT; valores esperados errados são corrigidos automaticamente computando o valor real
+4. **Mutação** — MutPy cria mutantes (versões com bugs sintéticos) da função
+5. **Mutation Score** — Testes são executados contra os mutantes → MS inicial
+6. **Prompt aumentado** — Mutantes sobreviventes viram contexto para o LLM gerar novos testes direcionados
+7. **Loop** — Repete até MS = 100% ou limite de iterações
+8. **Minimização greedy** — Remove asserções redundantes mantendo o MS máximo
 
 ![fluxo-de-mutacao](./assets/mutation.png)
 ![diagrama-mutap](./assets/diagrama-mutap.png)
@@ -38,6 +39,18 @@ O experimento foi desenhado para funcionar com 2 opções de LLM para escolha:
 
 A escolha é feita pelo parâmetro `--llm` na execução.
 
+## Opções de linha de comando
+
+| Flag | Descrição | Padrão |
+|---|---|---|
+| `put` | Caminho do arquivo PUT (obrigatório) | — |
+| `--llm` | LLM a usar: `gemini` ou `ollama` | `gemini` |
+| `--shot` | Tipo de prompt: `zero` ou `few` | `zero` |
+| `--max-iterations` | Máximo de iterações de aumento de prompt | `3` |
+| `--test` | Arquivo de teste pré-existente (pula LLM) | — |
+| `--no-minimize` | Pula a etapa de minimização greedy | `False` |
+| `--mutants-dir` | Diretório para salvar/reutilizar arquivos mutantes | `generated-mutants` |
+
 ## Referências
 
 - **Artigo original:** [Effective Test Generation Using Pre-trained Large Language Models and Mutation Testing](https://arxiv.org/abs/2308.16557) (arXiv:2308.16557)
@@ -55,10 +68,23 @@ mutap-demo/
 ├── .env                        # Configurações (API key, etc.)
 ├── .env.example                # Modelo do .env
 ├── .gitignore
+├── assets/                     # Imagens para documentação
+│   ├── diagrama-mutap.png
+│   └── mutation.png
+├── generated-mutants/          # Mutantes gerados (reutilizáveis)
+│   └── .gitkeep
 ├── put_examples/               # Funções para testar (PUTs)
 │   ├── calculator.py           #   add(), divide(), is_even()
 │   └── string_utils.py         #   reverse(), is_palindrome()
-└── mutap_pipeline.py           # Pipeline MuTAP completo
+└── src/                        # Código fonte do pipeline
+    ├── mutap_pipeline.py       # Orquestrador principal
+    ├── llm_option.py           # Interface LLM (Gemini / Ollama)
+    ├── prompts.py              # Templates de prompt (zero-shot, few-shot, aumentado)
+    ├── mutation.py             # MutPy runner + parsing de saída + geração de arquivos mutantes
+    ├── refinement.py           # Correção sintática de testes
+    ├── semantic.py             # Correção semântica de asserções
+    ├── minimization.py         # Minimização greedy de asserções
+    └── utils.py                # Utilitários (path do MutPy, extract_code)
 ```
 
 ## Tutorial
@@ -102,4 +128,74 @@ ollama pull codellama:7b-instruct
 ```
 OLLAMA_HOST=http://localhost:11434
 OLLAMA_MODEL=codellama:7b-instruct
+```
+### 3. Executar o pipeline
+
+```bash
+# Pipeline completo com Gemini
+python src/mutap_pipeline.py put_examples/calculator.py
+
+# Com Ollama
+python src/mutap_pipeline.py put_examples/calculator.py --llm ollama
+
+# Few-shot em vez de zero-shot
+python src/mutap_pipeline.py put_examples/calculator.py --shot few
+
+# Pular LLM, usar teste pré-existente (útil para testes)
+python src/mutap_pipeline.py put_examples/calculator.py --test meu_teste.py
+
+# Pular minimização greedy
+python src/mutap_pipeline.py put_examples/calculator.py --no-minimize
+```
+
+O pipeline executa as seguintes etapas na ordem:
+
+1. Carrega a função alvo (PUT)
+2. LLM gera teste inicial (zero-shot ou few-shot)
+3. **Correção semântica**: asserções com valores esperados errados são corrigidas automaticamente
+4. MutPy gera mutantes e calcula Mutation Score inicial
+5. Para cada mutante sobrevivente → prompt aumentado → LLM gera novo teste direcionado
+6. **Minimização greedy**: remove asserções redundantes mantendo o MS máximo
+7. Exibe teste final e MS
+
+### Exemplo de saída (com `--test`)
+
+```
+╔════════════════════════════════════════════╗
+║         MuTAP - Test Generation           ║
+║   LLM + Mutation Testing Feedback Loop    ║
+╚════════════════════════════════════════════╝
+
+📄 PUT: calculator.py
+🔤 LLM: GEMINI | Shot: zero
+
+📄 Usando teste pré-carregado: /tmp/test_redundant.py
+   → Teste:
+     def test_add():
+         assert add(2, 3) == 5
+         assert add(-1, 1) == 0
+         assert add(100, -50) == 50
+     ...
+
+🔧 Corrigindo erros semânticos...
+   ✅ Nenhuma correção semântica necessária
+
+🧬 Executando teste de mutação...
+   → MS inicial: 100.0%
+   → Mortos: 7  |  Sobreviventes: 0
+
+📊 RESULTADO FINAL
+   MS final: 100.0%
+
+🔧 Aplicando minimização greedy...
+   ✅ 9 → 3 asserções (-6)
+   → MS após minimização: 100.0%
+
+📄 Teste final:
+   def test_add():
+       assert add(2, 3) == 5
+   def test_divide():
+       assert divide(5, 2) == 2.5
+   def test_is_even():
+       assert is_even(4) is True
 ```

@@ -10,3 +10,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# tracked via .gitkeep
+generated-mutants/*
+!generated-mutants/.gitkeep
